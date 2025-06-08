@@ -5,6 +5,11 @@ class User(AbstractUser):
     is_worker = models.BooleanField(default=False)
     is_customer = models.BooleanField(default=False)
 
+    def save(self, *args, **kwargs):
+        if self.is_worker and not self.pk:
+            self.is_active = False
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return self.username
 
