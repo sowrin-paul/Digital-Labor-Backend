@@ -1,18 +1,28 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 
+# ==================================== User model =================================
 class User(AbstractUser):
+    ROLE_CHOICES = [
+        ("worker", "Worker"),
+        ("customer", "Customer"),
+    ]
     is_worker = models.BooleanField(default=False)
     is_customer = models.BooleanField(default=False)
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, blank=True, null=True)
 
     def save(self, *args, **kwargs):
-        if self.is_worker and not self.pk:
+        if self.is_worker:
+            self.role = "worker"
             self.is_active = False
+        elif self.is_customer:
+            self.role = "customer"
         super().save(*args, **kwargs)
 
     def __str__(self):
         return self.username
 
+# ==================================== Worker model =================================
 class Worker(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     skills = models.TextField()
@@ -24,12 +34,21 @@ class Worker(models.Model):
     def __str__(self):
         return self.user.username
 
+# ==================================== Job model =================================
 class Job(models.Model):
     STATUS_CHOICE = [
         ("open", "Open"),
         ("closed", "Closed"),
         ("completed", "Completed"),
     ]
+
+    assigned_worker = models.ForeignKey(
+        'Worker',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='assigned_jobs',
+    )
 
     customer = models.ForeignKey(User, on_delete=models.CASCADE, related_name="jobs")
     title = models.CharField(max_length=100)
@@ -43,6 +62,7 @@ class Job(models.Model):
     def __str__(self):
         return self.title
 
+# ==================================== Bid model =================================
 class Bid(models.Model):
     worker = models.ForeignKey(Worker, on_delete=models.CASCADE, related_name="bids")
     job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name="bids")
@@ -52,6 +72,7 @@ class Bid(models.Model):
     def __str__(self):
         return f"{self.worker.user.username} -> {self.job.title}"
 
+# ==================================== Payment model =================================
 class Payment(models.Model):
     STATUS_CHOICE = [
         ("pending", "Pending"),
@@ -73,6 +94,7 @@ class Payment(models.Model):
     def __str__(self):
         return f"{self.job.title} - {self.method}"
 
+# ==================================== Review model =================================
 class Review(models.Model):
     job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name="review")
     reviewer = models.ForeignKey(User, on_delete=models.CASCADE)
