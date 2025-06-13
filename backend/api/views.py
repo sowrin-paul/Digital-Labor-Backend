@@ -136,18 +136,14 @@ class AssignBidView(APIView):
         job.assigned_worker = bid.worker
         job.status = 'in-progress'
         job.save()
+        serialized_job = JobSerializer(job)
 
         return Response(
             {
                 "success": True,
                 "statusCode": 200,
                 "message": "Job successfully assigned.",
-                "data": {
-                    "job_id": job.id,
-                    "job_title": job.title,
-                    "assigned_worker": bid.worker.user.username,
-                    "status": job.status,
-                },
+                "data": serialized_job.data,
             },
             status=status.HTTP_200_OK
         )

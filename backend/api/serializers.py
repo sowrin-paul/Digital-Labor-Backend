@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User
+from .models import User, Worker, Job
 from django.contrib.auth.password_validation import validate_password
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -31,3 +31,21 @@ class RegisterSerializer(serializers.ModelSerializer):
             is_active=not is_worker,
         )
         return user
+
+class JobSerializer(serializers.ModelSerializer):
+    assigned_worker = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Job
+        fields = ['id', 'title', 'description', 'location', 'budget', 'status', 'assigned_worker']
+
+    def get_assigned_worker(self, obj):
+        if obj.assigned_worker:
+            return {
+                "id": obj.assigned_worker.id,
+                "username": obj.assigned_worker.user.username,
+                "skills": obj.assigned_worker.skills,
+                "experience": obj.assigned_worker.experience,
+                "location": obj.assigned_worker.location,
+            }
+        return None
