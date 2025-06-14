@@ -64,11 +64,17 @@ class Job(models.Model):
 
 # ==================================== Bid model =================================
 class Bid(models.Model):
+    STATUS_CHOICE = [
+        ("selected", "Selected"),
+        ("ignored", "Ignored"),
+        ("not_selected", "Not Selected"),
+    ]
+
     worker = models.ForeignKey(Worker, on_delete=models.CASCADE, related_name="bids")
     job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name="bids")
     bid_amount = models.DecimalField(max_digits=10, decimal_places=2)
     timestamp = models.DateTimeField(auto_now_add=True)
-
+    status = models.CharField(max_length=20, choices=STATUS_CHOICE, default="not_selected")
     def __str__(self):
         return f"{self.worker.user.username} -> {self.job.title}"
 

@@ -2,6 +2,7 @@ from rest_framework import serializers
 from .models import User, Worker, Job
 from django.contrib.auth.password_validation import validate_password
 
+# ========================================= Register ==================================
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
     confirmPassword = serializers.CharField(write_only=True, required=True)
@@ -32,6 +33,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         )
         return user
 
+# ================================= Job ==================================
 class JobSerializer(serializers.ModelSerializer):
     assigned_worker = serializers.SerializerMethodField()
 
