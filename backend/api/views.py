@@ -31,6 +31,7 @@ class RegisterView(APIView):
             user = serializer.save()
             refresh = RefreshToken.for_user(user)
             if user.is_worker:
+                Worker.objects.create(user=user, skills="", experience=0, location="")
                 return Response(
                     {
                         "success": True,
@@ -171,6 +172,16 @@ class JobUpdateView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def patch(self, request, pk):
+        if not request.user.is_customer:
+            return Response(
+                {
+                    "success": False,
+                    "statusCode": 403,
+                    "message": "Only customers can update jobs.",
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         job = get_object_or_404(Job, pk=pk, customer=request.user)
         serializer = JobSerializer(job, data=request.data, partial=True)
         if serializer.is_valid():
@@ -198,6 +209,16 @@ class JobDeleteView(generics.DestroyAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def delete(self, request, pk):
+        if not request.user.is_customer:
+            return Response(
+                {
+                    "success": False,
+                    "statusCode": 403,
+                    "message": "Only customers can delete jobs.",
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         job = get_object_or_404(Job, pk=pk, customer=request.user)
         job.delete()
         return Response(
@@ -214,6 +235,7 @@ class WorkerBidView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
+        # print(f"Authenticated user: {request.user}")
         job_id = request.data.get('job_id')
         bid_amount = request.data.get('bid_amount')
         # print("worker bid view is accessed.")
