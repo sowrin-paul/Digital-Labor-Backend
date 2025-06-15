@@ -145,9 +145,6 @@ class JobListView(generics.ListAPIView):
     serializer_class = JobSerializer
     permission_classes = [permissions.IsAuthenticated]
 
-    serializer_class = JobSerializer
-    permission_classes = [permissions.IsAuthenticated]
-
     def get_queryset(self):
         queryset = Job.objects.all()
         customer_id = self.request.query_params.get('customer_id', None)
@@ -211,7 +208,62 @@ class JobDeleteView(generics.DestroyAPIView):
             },
             status=status.HTTP_200_OK
         )
-# ============================================ Worker Assignment API ====================================
+
+# ============================================ Worker bidding API ====================================
+class WorkerBidView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        job_id = request.data.get('job_id')
+        bid_amount = request.data.get('bid_amount')
+        # print("worker bid view is accessed.")
+        if not job_id or not bid_amount:
+            return Response({
+                    "success": False,
+                    "statusCode": 400,
+                    "message": "job_id and bid_amount are required.",
+                },
+                status=status.HTTP_400_BAD_REQUEST)
+
+        job = get_object_or_404(Job, id=job_id)
+        # print("worker bid view is accessed.")
+        if job.status != 'open':
+            return Response({
+                    "success": False,
+                    "statusCode": 400,
+                    "message": "You can only bid on open jobs.",
+                },
+                status=status.HTTP_400_BAD_REQUEST)
+
+        if job.customer == request.user:
+            return Response(
+                {
+                    "success": False,
+                    "statusCode": 403,
+                    "message": "You cannot bid on your own job.",
+                },
+                status=status.HTTP_403_FORBIDDEN)
+
+        worker = get_object_or_404(Worker, user=request.user)
+
+        bid = Bid.objects.create(worker=worker, job=job, bid_amount=bid_amount)
+
+        return Response(
+            {
+                "success": True,
+                "statusCode": 201,
+                "message": "Bid successfully submitted.",
+                "data": {
+                    "bid_id": bid.id,
+                    "job_id": job.id,
+                    "job_title": job.title,
+                    "bid_amount": bid.bid_amount,
+                    "status": bid.status,
+                },
+            },
+            status=status.HTTP_201_CREATED)
+
+# ============================================ Worker assign API ====================================
 class AssignBidView(APIView):
     permission_classes = []
     authentication_classes = [JWTAuthentication]
@@ -261,7 +313,7 @@ class AssignBidView(APIView):
         Bid.objects.filter(job=job).exclude(id=bid_id).update(status="ignored")
         serialized_job = JobSerializer(job)
 
-        send_bid_notification(bid.worker.email, job.title)
+        send_bid_notification(bid.worker.user.email, job.title)
 
         return Response(
             {
