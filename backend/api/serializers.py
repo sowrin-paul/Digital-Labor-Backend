@@ -8,6 +8,7 @@ class RegisterSerializer(serializers.ModelSerializer):
     confirmPassword = serializers.CharField(write_only=True, required=True)
     is_worker = serializers.BooleanField(required=True)
     is_customer = serializers.BooleanField(required=True)
+    profile_picture = serializers.ImageField(required=False)
 
     class Meta:
         model = User
@@ -30,6 +31,7 @@ class RegisterSerializer(serializers.ModelSerializer):
             is_worker=is_worker,
             is_customer=validated_data['is_customer'],
             is_active=not is_worker,
+            profile_picture=validated_data.get('profile_picture'),
         )
         return user
 

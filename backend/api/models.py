@@ -10,6 +10,7 @@ class User(AbstractUser):
     is_worker = models.BooleanField(default=False)
     is_customer = models.BooleanField(default=False)
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, blank=True, null=True)
+    profile_picture = models.ImageField(upload_to="profile_pictures/", blank=True, null=True)
 
     def save(self, *args, **kwargs):
         if self.is_worker:
@@ -22,14 +23,15 @@ class User(AbstractUser):
     def __str__(self):
         return self.username
 
-# ==================================== Worker model =================================
+# ==================================== Worker model ===============================
 class Worker(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     skills = models.TextField()
     experience =  models.PositiveIntegerField()
     location = models.TextField(max_length=100, blank=True, null=True)
     nid = models.CharField(max_length=20, blank=True, null=True)
-    verified = models.BooleanField(default=True)
+    verified = models.BooleanField(default=False)
+    profile_picture = models.ImageField(upload_to="profile_pic_worker/", blank=True, null=True)
 
     def __str__(self):
         return self.user.username
@@ -78,7 +80,7 @@ class Bid(models.Model):
     def __str__(self):
         return f"{self.worker.user.username} -> {self.job.title}"
 
-# ==================================== Payment model =================================
+# ==================================== Payment model ===============================
 class Payment(models.Model):
     STATUS_CHOICE = [
         ("pending", "Pending"),

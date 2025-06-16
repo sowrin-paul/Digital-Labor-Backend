@@ -143,3 +143,10 @@ SIMPLE_JWT = {
 
 AUTH_USER_MODEL = "api.user"
 
+# configuration for sending email notification to the worker who got the job
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'  # Replace with your email server
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = 'your_email@example.com'  # Replace with your email address
+EMAIL_HOST_PASSWORD = 'your_email_password'  # Replace with your email password
