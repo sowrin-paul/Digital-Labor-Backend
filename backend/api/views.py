@@ -484,3 +484,66 @@ class WorkerProfileUpdateView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+# ============================================== Unassign worker ======================================
+class UnassignWorkerView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
+
+    def post(self, request):
+        job_id = request.data.get('job_id')
+
+        # Validate job_id
+        if not job_id:
+            return Response(
+                {
+                    "success": False,
+                    "statusCode": 400,
+                    "message": "job_id is required.",
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Get the job
+        job = get_object_or_404(Job, id=job_id)
+
+        # Ensure only the customer who created the job can unassign workers
+        if job.customer != request.user:
+            return Response(
+                {
+                    "success": False,
+                    "statusCode": 403,
+                    "message": "You do not have permission to unassign workers from this job.",
+                },
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Check if the job has an assigned worker
+        if not job.assigned_worker:
+            return Response(
+                {
+                    "success": False,
+                    "statusCode": 400,
+                    "message": "No worker is assigned to this job.",
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Unassign the worker and update the job status
+        job.assigned_worker = None
+        job.status = 'open'  # Reset the job status to "open"
+        job.save()
+
+        return Response(
+            {
+                "success": True,
+                "statusCode": 200,
+                "message": "Worker successfully unassigned from the job.",
+                "data": {
+                    "job_id": job.id,
+                    "job_title": job.title,
+                    "status": job.status,
+                },
+            },
+            status=status.HTTP_200_OK
+        )

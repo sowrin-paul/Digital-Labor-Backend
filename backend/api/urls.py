@@ -3,7 +3,7 @@ from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
-from .views import RegisterView, LoginView, AssignWorkerView, JobPostView, JobListView, JobDeleteView, JobUpdateView, WorkerBidView, JobBidListView, WorkerProfileUpdateView
+from .views import RegisterView, LoginView, AssignWorkerView, JobPostView, JobListView, JobDeleteView, JobUpdateView, WorkerBidView, JobBidListView, WorkerProfileUpdateView, UnassignWorkerView
 
 urlpatterns = [
     path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
@@ -15,6 +15,7 @@ urlpatterns = [
     path('jobs/<int:pk>/delete/', JobDeleteView.as_view(), name='job-delete'),
     path('jobs/create/', JobPostView.as_view(), name='job-create'),
     path('jobs/assign_bid/', AssignWorkerView.as_view(), name='assign-worker'),
+    path('jobs/unassign_worker/', UnassignWorkerView.as_view(), name='unassign-worker'),
     path('worker/bid/', WorkerBidView.as_view(), name='worker-bid'),
     path('customer/jobs/bids/', JobBidListView.as_view(), name='job-bid-list'),
     path('worker/profile/update/', WorkerProfileUpdateView.as_view(), name='worker-profile-update'),
