@@ -504,10 +504,8 @@ class UnassignWorkerView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Get the job
         job = get_object_or_404(Job, id=job_id)
 
-        # Ensure only the customer who created the job can unassign workers
         if job.customer != request.user:
             return Response(
                 {
@@ -518,7 +516,6 @@ class UnassignWorkerView(APIView):
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        # Check if the job has an assigned worker
         if not job.assigned_worker:
             return Response(
                 {
@@ -531,7 +528,7 @@ class UnassignWorkerView(APIView):
 
         # Unassign the worker and update the job status
         job.assigned_worker = None
-        job.status = 'open'  # Reset the job status to "open"
+        job.status = 'open'
         job.save()
 
         return Response(
