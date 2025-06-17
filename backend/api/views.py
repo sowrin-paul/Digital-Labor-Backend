@@ -578,28 +578,80 @@ class PaymentCreateView(APIView):
     serializer_class = PaymentSerializer
     permission_classes = [permissions.IsAuthenticated]
 
-    def post(self, serializer, payment_id):
-        job = serializer.validated_data['job']
-        amount = serializer.validated_data['amount']
-        payment = get_object_or_404(Payment, id=payment_id)
+    def post(self, request):
+        serializer = PaymentSerializer(data=request.data)
 
-        send_payment_notification(
-            customer_email=payment.job.customer.email,
-            worker_email=payment.job.assigned_worker.user.email,
-            job_title=payment.job.title,
-            amount=payment.amount,
+        if serializer.is_valid():
+            job = serializer.validated_data['job']
+            amount = serializer.validated_data['amount']
+
+            if job.customer != request.user:
+                return Response(
+                    {
+                        "success": False,
+                        "statusCode": 403,
+                        "message": "You can only pay for your own jobs.",
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+            if hasattr(job, 'payment'):
+                return Response(
+                    {
+                        "success": False,
+                        "statusCode": 400,
+                        "message": "Payment already exists for this job.",
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if amount <= 0:
+                return Response(
+                    {
+                        "success": False,
+                        "statusCode": 400,
+                        "message": "Amount must be greater than 0.",
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # Save the payment
+            payment = serializer.save(status='pending')
+
+            # Send payment notification
+            send_payment_notification(
+                customer_email=job.customer.email,
+                worker_email=job.assigned_worker.user.email,
+                job_title=job.title,
+                amount=amount,
+            )
+
+            return Response(
+                {
+                    "success": True,
+                    "statusCode": 201,
+                    "message": "Payment created successfully.",
+                    "data": {
+                        "payment_id": payment.id,
+                        "job_id": job.id,
+                        "amount": payment.amount,
+                        "method": payment.method,
+                        "status": payment.status,
+                        "created_at": payment.created_at,
+                    },
+                },
+                status=status.HTTP_201_CREATED,
+            )
+
+        return Response(
+            {
+                "success": False,
+                "statusCode": 400,
+                "message": "Invalid payment data.",
+                "errors": serializer.errors,
+            },
+            status=status.HTTP_400_BAD_REQUEST,
         )
-
-        if job.customer != self.request.user:
-            raise PermissionDenied("You can only pay for your own jobs.")
-
-        if hasattr(job, 'payment'):
-            raise serializers.ValidationError("Payment already exists for this job.")
-
-        if amount <= 0:
-            raise serializers.ValidationError("Amount must be greater than 0.")
-
-        serializer.save(status='pending')
 
 class JobPaymentStatusView(APIView):
     permission_classes = [permissions.IsAuthenticated]
