@@ -585,6 +585,7 @@ class PaymentCreateView(APIView):
             job = serializer.validated_data['job']
             amount = serializer.validated_data['amount']
 
+            # Ensure only the customer who owns the job can pay
             if job.customer != request.user:
                 return Response(
                     {
@@ -595,6 +596,7 @@ class PaymentCreateView(APIView):
                     status=status.HTTP_403_FORBIDDEN,
                 )
 
+            # Prevent duplicate payments
             if hasattr(job, 'payment'):
                 return Response(
                     {
@@ -605,6 +607,7 @@ class PaymentCreateView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
+            # Ensure the amount is valid
             if amount <= 0:
                 return Response(
                     {
