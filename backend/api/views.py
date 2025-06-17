@@ -619,7 +619,11 @@ class PaymentCreateView(APIView):
                 )
 
             # Save the payment
-            payment = serializer.save(status='pending')
+            payment = serializer.save(status='completed')  # Mark payment as completed
+
+            # Update the job status to "completed"
+            job.status = "completed"
+            job.save()
 
             # Send payment notification
             send_payment_notification(
@@ -633,13 +637,14 @@ class PaymentCreateView(APIView):
                 {
                     "success": True,
                     "statusCode": 201,
-                    "message": "Payment created successfully.",
+                    "message": "Payment created and job marked as completed successfully.",
                     "data": {
                         "payment_id": payment.id,
                         "job_id": job.id,
                         "amount": payment.amount,
                         "method": payment.method,
                         "status": payment.status,
+                        "job_status": job.status,
                         "created_at": payment.created_at,
                     },
                 },
