@@ -11,7 +11,7 @@ from django.shortcuts import get_object_or_404
 from django.core.exceptions import PermissionDenied
 from .models import User, Payment, Job, Worker, Review, Bid
 from .serializers import RegisterSerializer, JobSerializer, PaymentSerializer
-from .utils import release_funds
+from .utils import release_funds, send_payment_notification
 
 def send_bid_notification(worker_email, job_title):
     try:
@@ -574,13 +574,21 @@ class UnassignWorkerView(APIView):
         )
 
 # ====================================== Payment api ==================================
-class PaymentCreateView(generics.CreateAPIView):
+class PaymentCreateView(APIView):
     serializer_class = PaymentSerializer
     permission_classes = [permissions.IsAuthenticated]
 
-    def perform_create(self, serializer):
+    def post(self, serializer, payment_id):
         job = serializer.validated_data['job']
         amount = serializer.validated_data['amount']
+        payment = get_object_or_404(Payment, id=payment_id)
+
+        send_payment_notification(
+            customer_email=payment.job.customer.email,
+            worker_email=payment.job.assigned_worker.user.email,
+            job_title=payment.job.title,
+            amount=payment.amount,
+        )
 
         if job.customer != self.request.user:
             raise PermissionDenied("You can only pay for your own jobs.")
@@ -600,7 +608,6 @@ class JobPaymentStatusView(APIView):
         # Get the job
         job = get_object_or_404(Job, id=job_id)
 
-        # Ensure the authenticated user is either the customer or the assigned worker
         if job.customer != request.user and (not job.assigned_worker or job.assigned_worker.user != request.user):
             return Response(
                 {
@@ -652,7 +659,6 @@ class CustomerReviewWorkerView(APIView):
     def post(self, request, job_id):
         job = get_object_or_404(Job, id=job_id)
 
-        # Ensure the job is completed and the authenticated user is the customer
         if job.customer != request.user:
             return Response(
                 {
@@ -723,7 +729,6 @@ class WorkerReviewCustomerView(APIView):
     def post(self, request, job_id):
         job = get_object_or_404(Job, id=job_id)
 
-        # Ensure the job is completed and the authenticated user is the assigned worker
         if not job.assigned_worker or job.assigned_worker.user != request.user:
             return Response(
                 {
