@@ -2,6 +2,7 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from django.db.models import Count
 from .models import Worker, User, Job, Payment, Bid, Review
+from .utils import release_funds
 
 @admin.register(User)
 class CustomUserAdmin(UserAdmin):
@@ -67,16 +68,30 @@ class BidAdmin(admin.ModelAdmin):
             self.message_user(request, f"{worker['worker__user__username']} - {worker['count']} jobs")
     most_hired_workers.short_description = "Show Top 5 Most Hired Workers"
 
-@admin.register(Payment)
-class PaymentAdmin(admin.ModelAdmin):
-    list_display = ("job", "amount", "method", "status", "created_at",)
-    list_filter = ("status", "method",)
-    search_fields = ("job__title",)
-    date_hierarchy = "created_at"
-
 @admin.register(Review)
 class Review(admin.ModelAdmin):
     list_display = ('job', 'reviewer', 'rating', 'created_at',)
     list_filter = ('rating',)
     search_fields = ('reviewer__username', 'job__title',)
     date_hierarchy = 'created_at'
+
+@admin.register(Payment)
+class PaymentAdmin(admin.ModelAdmin):
+    list_display = ('job', 'amount', 'method', 'status', 'created_at')
+    list_filter = ('status', 'method')
+    actions = ['mark_as_completed']
+
+    def mark_as_completed(self, request, queryset):
+        updated = queryset.update(status='completed')
+        self.message_user(request, f'{updated} payment(s) marked as completed.')
+
+    mark_as_completed.short_description = "Mark selected payments as completed"
+
+    def release_payment(modeladmin, request, queryset):
+        for payment in queryset:
+            try:
+                release_funds(payment)
+            except Exception as e:
+                modeladmin.message_user(request, f"Error: {e}", level=messages.ERROR)
+
+    release_payment.short_description = "Release escrow to worker"

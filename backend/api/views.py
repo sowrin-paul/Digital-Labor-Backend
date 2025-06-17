@@ -1,5 +1,5 @@
 from django.contrib.auth import authenticate
-from rest_framework import generics, permissions
+from rest_framework import generics, permissions, serializers
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -10,7 +10,8 @@ from django.core.mail import send_mail
 from django.shortcuts import get_object_or_404
 from django.core.exceptions import PermissionDenied
 from .models import User, Payment, Job, Worker, Review, Bid
-from .serializers import RegisterSerializer, JobSerializer
+from .serializers import RegisterSerializer, JobSerializer, PaymentSerializer
+from .utils import release_funds
 
 def send_bid_notification(worker_email, job_title):
     try:
@@ -164,7 +165,10 @@ class JobListView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        queryset = Job.objects.all()
+        if not self.request.user.is_customer:
+            return Job.objects.none()
+
+        queryset = Job.objects.filter(customer=self.request.user)
         customer_id = self.request.query_params.get('customer_id', None)
         status = self.request.query_params.get('status', None)
         location = self.request.query_params.get('location', None)
@@ -175,6 +179,30 @@ class JobListView(generics.ListAPIView):
             queryset = queryset.filter(customer_id=customer_id)
         if status:
             queryset = queryset.filter(status=status)
+        if location:
+            queryset = queryset.filter(location__icontains=location)
+        if min_budget:
+            queryset = queryset.filter(budget__gte=min_budget)
+        if max_budget:
+            queryset = queryset.filter(budget__lte=max_budget)
+
+        return queryset
+
+# worker can see job list
+class WorkerJobListView(generics.ListAPIView):
+    serializer_class = JobSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        if not self.request.user.is_worker:
+            return Job.objects.none()
+
+        queryset = Job.objects.filter(status="open")
+
+        location = self.request.query_params.get('location', None)
+        min_budget = self.request.query_params.get('min_budget', None)
+        max_budget = self.request.query_params.get('max_budget', None)
+
         if location:
             queryset = queryset.filter(location__icontains=location)
         if min_budget:
@@ -375,6 +403,7 @@ class AssignWorkerView(APIView):
         # if the job is in progress
         job.assigned_worker = bid.worker
         job.status = 'in-progress'
+        job.budget = bid.bid_amount
         job.save()
 
         # if the bid is selected
@@ -492,20 +521,20 @@ class UnassignWorkerView(APIView):
 
     def post(self, request):
         job_id = request.data.get('job_id')
+        worker_id = request.data.get('worker_id')
 
-        # Validate job_id
-        if not job_id:
+        if not job_id or not worker_id:
             return Response(
                 {
                     "success": False,
                     "statusCode": 400,
-                    "message": "job_id is required.",
+                    "message": "job_id and worker_id are required.",
                 },
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         job = get_object_or_404(Job, id=job_id)
-
+        print(f"{job.customer} is a customer.")
         if job.customer != request.user:
             return Response(
                 {
@@ -516,17 +545,16 @@ class UnassignWorkerView(APIView):
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        if not job.assigned_worker:
+        if not job.assigned_worker or job.assigned_worker.id != worker_id:
             return Response(
                 {
                     "success": False,
                     "statusCode": 400,
-                    "message": "No worker is assigned to this job.",
+                    "message": "The specified worker is not assigned to this job.",
                 },
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Unassign the worker and update the job status
         job.assigned_worker = None
         job.status = 'open'
         job.save()
@@ -543,4 +571,208 @@ class UnassignWorkerView(APIView):
                 },
             },
             status=status.HTTP_200_OK
+        )
+
+# ====================================== Payment api ==================================
+class PaymentCreateView(generics.CreateAPIView):
+    serializer_class = PaymentSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def perform_create(self, serializer):
+        job = serializer.validated_data['job']
+        amount = serializer.validated_data['amount']
+
+        if job.customer != self.request.user:
+            raise PermissionDenied("You can only pay for your own jobs.")
+
+        if hasattr(job, 'payment'):
+            raise serializers.ValidationError("Payment already exists for this job.")
+
+        if amount <= 0:
+            raise serializers.ValidationError("Amount must be greater than 0.")
+
+        serializer.save(status='pending')
+
+class JobPaymentStatusView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, job_id):
+        # Get the job
+        job = get_object_or_404(Job, id=job_id)
+
+        # Ensure the authenticated user is either the customer or the assigned worker
+        if job.customer != request.user and (not job.assigned_worker or job.assigned_worker.user != request.user):
+            return Response(
+                {
+                    "success": False,
+                    "statusCode": 403,
+                    "message": "You do not have permission to view this job's payment status.",
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # Prepare the response data
+        payment_data = None
+        if hasattr(job, 'payment'):
+            payment_data = {
+                "payment_id": job.payment.id,
+                "amount": job.payment.amount,
+                "method": job.payment.method,
+                "status": job.payment.status,
+                "created_at": job.payment.created_at,
+            }
+
+        return Response(
+            {
+                "success": True,
+                "statusCode": 200,
+                "message": "Job and payment status retrieved successfully.",
+                "data": {
+                    "job_id": job.id,
+                    "job_title": job.title,
+                    "job_status": job.status,
+                    "customer": {
+                        "id": job.customer.id,
+                        "username": job.customer.username,
+                    },
+                    "assigned_worker": {
+                        "id": job.assigned_worker.id,
+                        "username": job.assigned_worker.user.username,
+                    } if job.assigned_worker else None,
+                    "payment": payment_data,
+                },
+            },
+            status=status.HTTP_200_OK,
+        )
+
+# ============================================ Review api ======================================
+class CustomerReviewWorkerView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, job_id):
+        job = get_object_or_404(Job, id=job_id)
+
+        # Ensure the job is completed and the authenticated user is the customer
+        if job.customer != request.user:
+            return Response(
+                {
+                    "success": False,
+                    "statusCode": 403,
+                    "message": "You do not have permission to review this worker.",
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if job.status != "completed":
+            return Response(
+                {
+                    "success": False,
+                    "statusCode": 400,
+                    "message": "You can only review workers for completed jobs.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Ensure the worker is assigned to the job
+        if not job.assigned_worker:
+            return Response(
+                {
+                    "success": False,
+                    "statusCode": 400,
+                    "message": "No worker is assigned to this job.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Validate and save the review
+        data = request.data
+        rating = data.get("rating")
+        comment = data.get("comment", "")
+
+        if not rating or int(rating) < 1 or int(rating) > 5:
+            return Response(
+                {
+                    "success": False,
+                    "statusCode": 400,
+                    "message": "Rating must be between 1 and 5.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        Review.objects.create(
+            job=job,
+            reviewer=request.user,
+            reviewee=job.assigned_worker.user,
+            review_type="worker",
+            rating=rating,
+            comment=comment,
+        )
+
+        return Response(
+            {
+                "success": True,
+                "statusCode": 201,
+                "message": "Review submitted successfully.",
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+class WorkerReviewCustomerView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, job_id):
+        job = get_object_or_404(Job, id=job_id)
+
+        # Ensure the job is completed and the authenticated user is the assigned worker
+        if not job.assigned_worker or job.assigned_worker.user != request.user:
+            return Response(
+                {
+                    "success": False,
+                    "statusCode": 403,
+                    "message": "You do not have permission to review this customer.",
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if job.status != "completed":
+            return Response(
+                {
+                    "success": False,
+                    "statusCode": 400,
+                    "message": "You can only review customers for completed jobs.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Validate and save the review
+        data = request.data
+        rating = data.get("rating")
+        comment = data.get("comment", "")
+
+        if not rating or int(rating) < 1 or int(rating) > 5:
+            return Response(
+                {
+                    "success": False,
+                    "statusCode": 400,
+                    "message": "Rating must be between 1 and 5.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        Review.objects.create(
+            job=job,
+            reviewer=request.user,
+            reviewee=job.customer,
+            review_type="customer",
+            rating=rating,
+            comment=comment,
+        )
+
+        return Response(
+            {
+                "success": True,
+                "statusCode": 201,
+                "message": "Review submitted successfully.",
+            },
+            status=status.HTTP_201_CREATED,
         )

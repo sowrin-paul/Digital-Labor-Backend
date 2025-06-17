@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, Worker, Job
+from .models import User, Worker, Job, Payment
 from django.contrib.auth.password_validation import validate_password
 
 # ========================================= Register ==================================
@@ -12,7 +12,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ('username', 'email', 'password', 'confirmPassword', 'is_worker', 'is_customer')
+        fields = ('username', 'email', 'password', 'confirmPassword', 'is_worker', 'is_customer', 'profile_picture')
 
     def validate(self, attrs):
         if attrs['password'] != attrs['confirmPassword']:
@@ -53,3 +53,19 @@ class JobSerializer(serializers.ModelSerializer):
                 "location": obj.assigned_worker.location,
             }
         return None
+
+# =============================== Payment ================================
+class PaymentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Payment
+        fields = ['job', 'amount', 'method', 'status']
+
+    def validate_method(self, value):
+        if value not in ['bkash', 'nagad', 'rocket']:
+            raise serializers.ValidationError("Invalid payment method. Choose from bKash, Nagad, or Rocket.")
+        return value
+
+    def validate_amount(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("Amount must be greater than 0.")
+        return value

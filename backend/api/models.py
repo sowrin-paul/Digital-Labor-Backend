@@ -96,19 +96,30 @@ class Payment(models.Model):
     job = models.OneToOneField(Job, on_delete=models.CASCADE, related_name="payment")
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     method = models.CharField(max_length=20, choices=METHOD_CHOICE)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICE)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICE, default="pending")
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return f"{self.job.title} - {self.method}"
 
+class WorkerWallet(models.Model):
+    worker = models.OneToOneField(Worker, on_delete=models.CASCADE)
+    balance = models.DecimalField(max_digits=10, decimal_places=2, default=0.0)
+
 # ==================================== Review model =================================
 class Review(models.Model):
-    job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name="review")
-    reviewer = models.ForeignKey(User, on_delete=models.CASCADE)
+    REVIEW_TYPE_CHOICES = [
+        ("worker", "Worker"),
+        ("customer", "Customer"),
+    ]
+
+    job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name="reviews")
+    reviewer = models.ForeignKey(User, on_delete=models.CASCADE, related_name="given_reviews", default="")
+    reviewee = models.ForeignKey(User, on_delete=models.CASCADE, related_name="received_reviews", default="")
+    review_type = models.CharField(max_length=20, choices=REVIEW_TYPE_CHOICES, default="worker")
     rating = models.PositiveSmallIntegerField()
     comment = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"Review by {self.reviewer.username} for {self.job.title}"
+        return f"Review by {self.reviewer.username} for {self.reviewee.username} ({self.review_type})"
