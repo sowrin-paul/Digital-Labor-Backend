@@ -607,44 +607,58 @@ class PaymentCreateView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            # Ensure the amount is valid
-            if amount <= 0:
+            # Ensure the amount matches the selected bid amount
+            if not job.assigned_worker:
                 return Response(
                     {
                         "success": False,
                         "statusCode": 400,
-                        "message": "Amount must be greater than 0.",
+                        "message": "No worker assigned to this job.",
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            selected_bid = Bid.objects.filter(job=job, worker=job.assigned_worker, status="selected").first()
+            if not selected_bid:
+                return Response(
+                    {
+                        "success": False,
+                        "statusCode": 400,
+                        "message": "No selected bid found for this worker.",
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if float(amount) != float(selected_bid.bid_amount):
+                return Response(
+                    {
+                        "success": False,
+                        "statusCode": 400,
+                        "message": f"Payment amount must match the selected bid amount ({selected_bid.bid_amount}).",
                     },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            # Save the payment
-            payment = serializer.save(status='completed')  # Mark payment as completed
+            # Save the payment as pending
+            payment = serializer.save(status='pending')
 
-            # Update the job status to "completed"
-            job.status = "completed"
-            job.save()
-
-            # Send payment notification
-            send_payment_notification(
-                customer_email=job.customer.email,
-                worker_email=job.assigned_worker.user.email,
-                job_title=job.title,
-                amount=amount,
-            )
+            # send_mail(
+            #     subject="Payment Approval Needed",
+            #     message=f"A payment request for job '{job.title}' needs your approval.",
+            #     from_email="noreply@yourdomain.com",
+            #     recipient_list=["admin@yourdomain.com"],
+            #     fail_silently=True,
+            # )
 
             return Response(
                 {
                     "success": True,
                     "statusCode": 201,
-                    "message": "Payment created and job marked as completed successfully.",
+                    "message": "Payment request submitted and awaiting admin approval.",
                     "data": {
                         "payment_id": payment.id,
                         "job_id": job.id,
                         "amount": payment.amount,
                         "method": payment.method,
                         "status": payment.status,
-                        "job_status": job.status,
                         "created_at": payment.created_at,
                     },
                 },

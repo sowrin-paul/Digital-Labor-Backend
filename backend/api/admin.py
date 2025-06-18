@@ -1,3 +1,4 @@
+from pyexpat.errors import messages
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from django.db.models import Count
@@ -82,9 +83,17 @@ class PaymentAdmin(admin.ModelAdmin):
     actions = ['mark_as_completed']
 
     def mark_as_completed(self, request, queryset):
-        updated = queryset.update(status='completed')
-        self.message_user(request, f'{updated} payment(s) marked as completed.')
-
+        updated = 0
+        for payment in queryset:
+            if payment.status != 'completed':
+                payment.status = 'completed'
+                payment.save()
+                # Update job status
+                job = payment.job
+                job.status = 'completed'
+                job.save()
+                updated += 1
+        self.message_user(request, f'{updated} payment(s) marked as completed and jobs updated.')
     mark_as_completed.short_description = "Mark selected payments as completed"
 
     def release_payment(modeladmin, request, queryset):
