@@ -221,26 +221,6 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - **Issues**: Report bugs and request features via GitHub Issues
 - **Discussions**: Join community discussions in GitHub Discussions
 
-## 🗺️ Roadmap
-
-### Version 1.1
-- [ ] Real-time notifications with WebSockets
-- [ ] Advanced search and filtering
-- [ ] File attachments for jobs
-- [ ] Multi-language support
-
-### Version 1.2
-- [ ] Mobile app API enhancements
-- [ ] Payment gateway integrations
-- [ ] Advanced analytics dashboard
-- [ ] Automated testing pipeline
-
-### Version 2.0
-- [ ] Microservices architecture
-- [ ] GraphQL API
-- [ ] Machine learning job matching
-- [ ] Video call integration
-
 ## 📈 Performance
 
 - **Response Time**: < 200ms for most API endpoints
